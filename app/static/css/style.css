@@ -1,0 +1,102 @@
+/* 步骤导航样式 */
+.steps-container {
+    width: 100%;
+    margin: 0 auto 30px;
+}
+
+.steps {
+    display: flex;
+    justify-content: space-between;
+    position: relative;
+}
+
+.steps::before {
+    content: '';
+    position: absolute;
+    top: 15px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e0e0e0;
+    z-index: 1;
+}
+
+.step {
+    width: 30%;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+    background-color: #fff;
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-weight: bold;
+    color: #999;
+    border: 1px solid #e0e0e0;
+}
+
+.step.active {
+    background-color: #0d6efd;
+    color: white;
+    border-color: #0d6efd;
+}
+
+.step.completed {
+    background-color: #198754;
+    color: white;
+    border-color: #198754;
+}
+
+/* 大纲编辑样式 */
+.outline-section {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 15px;
+    border: 1px solid #dee2e6;
+}
+
+.outline-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.outline-section-title {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.content-item {
+    display: flex;
+    margin-bottom: 5px;
+}
+
+.content-input {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
+.outline-actions button {
+    margin-left: 5px;
+}
+
+/* 其他样式 */
+.card {
+    border: none;
+    border-radius: 10px;
+}
+
+.card-header {
+    border-radius: 10px 10px 0 0 !important;
+}
+
+.form-control:focus,
+.btn:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+.btn-outline-danger {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+} 

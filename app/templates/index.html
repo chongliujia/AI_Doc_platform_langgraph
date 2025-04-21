@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI文档生成平台</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/style.css') }}">
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-10">
+                <div class="card shadow">
+                    <div class="card-header bg-primary text-white">
+                        <h2 class="text-center mb-0">AI文档生成平台</h2>
+                    </div>
+                    <div class="card-body">
+                        <!-- 步骤导航 -->
+                        <div class="steps-container mb-4">
+                            <div class="steps">
+                                <div class="step active" id="step1">1. 输入信息</div>
+                                <div class="step" id="step2">2. 编辑大纲</div>
+                                <div class="step" id="step3">3. 生成文档</div>
+                            </div>
+                        </div>
+
+                        <!-- 步骤1：输入信息 -->
+                        <div id="step1-content">
+                            <form id="topic-form">
+                                <div class="mb-3">
+                                    <label for="topic" class="form-label">文档主题</label>
+                                    <input type="text" class="form-control" id="topic" placeholder="请输入文档主题" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="page-limit" class="form-label">页数限制</label>
+                                    <input type="number" class="form-control" id="page-limit" min="1" max="50" value="10" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">文档类型</label>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="document-type" id="ppt-type" value="ppt" checked>
+                                        <label class="form-check-label" for="ppt-type">
+                                            PPT演示文稿
+                                        </label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="document-type" id="word-type" value="word">
+                                        <label class="form-check-label" for="word-type">
+                                            Word文档
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary" id="generate-outline-btn">生成大纲</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- 步骤2：编辑大纲 -->
+                        <div id="step2-content" style="display: none;">
+                            <h3 id="document-title" class="mb-3"></h3>
+                            <div id="outline-container">
+                                <!-- 大纲内容将在这里动态生成 -->
+                            </div>
+                            <div class="mt-3">
+                                <button class="btn btn-success me-2" id="add-section-btn">添加章节</button>
+                                <button class="btn btn-primary me-2" id="confirm-outline-btn">确认大纲</button>
+                                <button class="btn btn-secondary" id="back-to-step1-btn">返回</button>
+                            </div>
+                        </div>
+
+                        <!-- 步骤3：生成文档 -->
+                        <div id="step3-content" style="display: none;">
+                            <div class="text-center">
+                                <div id="loading-container">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">正在生成...</span>
+                                    </div>
+                                    <p class="mt-2">正在生成文档，请稍候...</p>
+                                </div>
+                                <div id="download-container" style="display: none;">
+                                    <div class="alert alert-success" role="alert">
+                                        <h4 class="alert-heading">文档生成成功!</h4>
+                                        <p>您的文档已经准备好，请点击下方按钮下载。</p>
+                                    </div>
+                                    <a id="download-link" class="btn btn-primary" href="#" target="_blank">下载文档</a>
+                                    <button class="btn btn-secondary mt-3" id="start-over-btn">重新开始</button>
+                                </div>
+                                <div id="error-container" style="display: none;">
+                                    <div class="alert alert-danger" role="alert">
+                                        <h4 class="alert-heading">出错了!</h4>
+                                        <p id="error-message"></p>
+                                    </div>
+                                    <button class="btn btn-secondary" id="try-again-btn">返回修改</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', path='/js/main.js') }}"></script>
+</body>
+</html> 
