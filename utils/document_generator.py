@@ -5,9 +5,15 @@ from pptx.enum.text import PP_ALIGN
 from pptx.enum.shapes import MSO_CONNECTOR
 from docx import Document
 from docx.shared import Pt as DocxPt
+from docx.shared import RGBColor as DocxRGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import re
 import traceback
+import docx.oxml.shared
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement, parse_xml
+from docx.oxml.ns import nsdecls, qn
+import lxml.etree as ET
 
 
 class DocumentGenerator:
@@ -537,48 +543,126 @@ class DocumentGenerator:
         Returns:
             Document: 生成的Word文档对象
         """
+        # 导入必要的模块
+        import docx.oxml.shared
+        from docx.oxml.ns import qn
+        
         doc = Document()
         
-        # 设置默认字体为微软雅黑
+        # 定义中文字体，确保兼容性
+        chinese_font = '微软雅黑'
+        fallback_fonts = ['宋体', 'SimSun', 'Microsoft YaHei', 'SimHei', 'Arial Unicode MS']
+        
+        # 全局应用字体的健壮版本
+        def apply_chinese_font(run):
+            # 设置直接的字体属性
+            run.font.name = chinese_font
+            
+            try:
+                # 获取或创建rPr元素
+                rPr = run._element.get_or_add_rPr()
+                
+                # 设置东亚语言
+                try:
+                    lang = rPr.xpath('./w:lang')
+                    if not lang:
+                        lang = docx.oxml.shared.OxmlElement('w:lang')
+                        lang.set(qn('w:eastAsia'), 'zh-CN')
+                        rPr.append(lang)
+                    else:
+                        lang[0].set(qn('w:eastAsia'), 'zh-CN')
+                except Exception as e:
+                    print(f"设置语言时出错: {e}")
+                
+                # 设置rFonts (字体)
+                try:
+                    rFonts = rPr.xpath('./w:rFonts')
+                    if not rFonts:
+                        rFonts = docx.oxml.shared.OxmlElement('w:rFonts')
+                        rFonts.set(qn('w:eastAsia'), chinese_font)
+                        rPr.append(rFonts)
+                    else:
+                        rFonts[0].set(qn('w:eastAsia'), chinese_font)
+                except Exception as e:
+                    print(f"设置字体时出错: {e}")
+                    
+                # 确保此文本使用东亚字体
+                try:
+                    # 确保此文本使用东亚字体
+                    hint = docx.oxml.shared.OxmlElement('w:eastAsianLayout')
+                    hint.set(qn('w:id'), '1')
+                    rPr.append(hint)
+                except Exception:
+                    pass
+                    
+            except Exception as e:
+                print(f"应用中文字体失败: {e}")
+        
+        # 设置一个helper函数来处理段落左右对齐
+        def set_paragraph_alignment(paragraph, alignment=WD_ALIGN_PARAGRAPH.JUSTIFY):
+            paragraph.alignment = alignment
+            # 直接通过XML设置来强制对齐方式
+            p = paragraph._p
+            pPr = p.get_or_add_pPr()
+            jc = docx.oxml.shared.OxmlElement('w:jc')
+            jc.set(qn('w:val'), 'both' if alignment == WD_ALIGN_PARAGRAPH.JUSTIFY else 'left')
+            for old_jc in pPr.findall(qn('w:jc')):
+                pPr.remove(old_jc)
+            pPr.append(jc)
+        
+        # 设置文档默认样式
         style_normal = doc.styles['Normal']
-        style_normal.font.name = '微软雅黑'
+        style_normal.font.name = chinese_font
         style_normal.font.size = DocxPt(10.5)  # 设置正文默认字号为五号(10.5磅)
         
         # 设置标题样式
-        for i in range(1, 10):  # 设置1-9级标题样式
-            if f'Heading {i}' in doc.styles:
-                heading_style = doc.styles[f'Heading {i}']
-                heading_style.font.name = '微软雅黑'
-                heading_style.font.color.rgb = RGBColor(0, 0, 0)  # 黑色
+        for i in range(1, 10):
+            style_name = f'Heading {i}'
+            if style_name in doc.styles:
+                style = doc.styles[style_name]
+                style.font.name = chinese_font
+                
+                # 使用XML设置东亚字体
+                rPr = style._element.get_or_add_rPr()
+                if rPr is not None:
+                    rFonts = rPr.get_or_add_rFonts()
+                    rFonts.set(qn('w:eastAsia'), chinese_font)
                 
                 # 设置标题字号
-                if i == 1:
-                    heading_style.font.size = DocxPt(16)  # 一级标题
-                    heading_style.font.bold = True
-                elif i == 2:
-                    heading_style.font.size = DocxPt(14)  # 二级标题
-                    heading_style.font.bold = True
-                else:
-                    heading_style.font.size = DocxPt(12)  # 其他级别标题
+                heading_sizes = {
+                    1: 22,    # 一级标题: 22磅
+                    2: 16,    # 二级标题: 16磅
+                    3: 15,    # 三级标题: 15磅
+                    4: 14,    # 四级标题: 14磅
+                    5: 13,    # 五级标题: 13磅
+                    6: 12,    # 六级标题: 12磅
+                    7: 11,    # 七级标题: 11磅
+                    8: 10.5,  # 八级标题: 10.5磅
+                    9: 10.5,  # 九级标题: 10.5磅
+                }
+                if i in heading_sizes:
+                    style.font.size = DocxPt(heading_sizes[i])
         
         # 添加标题
         title_para = doc.add_heading(title, 0)
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
         for run in title_para.runs:
-            run.font.name = '微软雅黑'
+            apply_chinese_font(run)
             run.font.size = DocxPt(22)  # 设置文档标题字号
             run.font.bold = True
         
         # 添加目录标题
         toc_heading = doc.add_heading("目录", 1)
+        set_paragraph_alignment(toc_heading, WD_ALIGN_PARAGRAPH.LEFT)
         for run in toc_heading.runs:
-            run.font.name = '微软雅黑'
+            apply_chinese_font(run)
         
         # 添加目录内容
         for i, section in enumerate(outline_data, 1):
             para = doc.add_paragraph()
+            set_paragraph_alignment(para, WD_ALIGN_PARAGRAPH.LEFT)
             run = para.add_run(f"{i}. {section['title']}")
-            run.font.name = '微软雅黑'
+            apply_chinese_font(run)
             run.bold = True
         
         # 添加分页符
@@ -590,19 +674,22 @@ class DocumentGenerator:
             
             # 添加章节标题
             heading = doc.add_heading(f"{i}. {section_title}", 1)
+            set_paragraph_alignment(heading, WD_ALIGN_PARAGRAPH.LEFT)
             for run in heading.runs:
-                run.font.name = '微软雅黑'
+                apply_chinese_font(run)
             
             # 添加章节概要（大纲点）
             summary_para = doc.add_paragraph()
+            set_paragraph_alignment(summary_para, WD_ALIGN_PARAGRAPH.LEFT)
             summary_run = summary_para.add_run("章节概要:")
-            summary_run.font.name = '微软雅黑'
+            apply_chinese_font(summary_run)
             summary_run.bold = True
             
             for point in section['content']:
                 para = doc.add_paragraph(style='List Bullet')
+                set_paragraph_alignment(para, WD_ALIGN_PARAGRAPH.JUSTIFY)
                 point_run = para.add_run(point)
-                point_run.font.name = '微软雅黑'
+                apply_chinese_font(point_run)
             
             # 添加详细内容（如果有）
             if content_data and section_title in content_data:
@@ -611,8 +698,9 @@ class DocumentGenerator:
                 
                 # 添加详细内容标题
                 detail_para = doc.add_paragraph()
+                set_paragraph_alignment(detail_para, WD_ALIGN_PARAGRAPH.LEFT)
                 detail_run = detail_para.add_run("详细内容:")
-                detail_run.font.name = '微软雅黑'
+                apply_chinese_font(detail_run)
                 detail_run.bold = True
                 
                 # 添加AI生成的内容，处理可能的Markdown格式
@@ -637,16 +725,18 @@ class DocumentGenerator:
                         if para_text.strip().startswith(('-', '*', '•')):
                             # 添加为项目符号
                             bullet_para = doc.add_paragraph(style='List Bullet')
+                            set_paragraph_alignment(bullet_para, WD_ALIGN_PARAGRAPH.JUSTIFY)
                             # 移除前导符号
                             clean_text = re.sub(r'^[-*•]\s+', '', para_text.strip())
                             bullet_run = bullet_para.add_run(clean_text)
-                            bullet_run.font.name = '微软雅黑'
+                            apply_chinese_font(bullet_run)
                         else:
                             # 普通段落
                             normal_para = doc.add_paragraph()
+                            set_paragraph_alignment(normal_para, WD_ALIGN_PARAGRAPH.JUSTIFY)
                             normal_run = normal_para.add_run(para_text.strip())
-                            normal_run.font.name = '微软雅黑'
-            
+                            apply_chinese_font(normal_run)
+        
             # 每个章节后添加分页符，除非是最后一个章节
             if i < len(outline_data):
                 doc.add_page_break()
@@ -661,5 +751,15 @@ class DocumentGenerator:
         section.bottom_margin = DocxPt(72)  # 下边距1英寸
         section.left_margin = DocxPt(72)    # 左边距1英寸
         section.right_margin = DocxPt(72)   # 右边距1英寸
-            
+        
+        # 设置RTL为禁用
+        try:
+            sectPr = section._sectPr
+            if sectPr is not None:
+                bidi = docx.oxml.shared.OxmlElement('w:bidi')
+                bidi.set(qn('w:val'), '0')
+                sectPr.append(bidi)
+        except Exception as e:
+            print(f"设置RTL失败: {e}")
+        
         return doc 

@@ -12,7 +12,7 @@
         </el-main>
         <el-footer height="40px">
           <div class="footer-content">
-            <p>© 2023 AI文档生成平台 - 基于LangGraph和DeepSeek API</p>
+            <p>© 2025 AI文档生成平台 - 基于LangGraph和DeepSeek API</p>
           </div>
         </el-footer>
       </el-container>
