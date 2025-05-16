@@ -2,13 +2,24 @@ import os
 import json
 import asyncio
 import httpx
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Union
 import time
 import random
 from dotenv import load_dotenv
+import requests
+import logging
 
 # 加载环境变量
 load_dotenv()
+
+# 添加langchain相关导入
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_openai import ChatOpenAI
+
+# 设置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class DeepSeekClient:
     """DeepSeek API客户端"""
@@ -161,4 +172,100 @@ class DeepSeekClient:
         content += f"\n总之，{section_title}是{document_topic or '本主题'}中不可或缺的一部分，"
         content += f"对于全面理解{document_title or '整体内容'}具有重要的指导意义。"
         
-        return content 
+        return content
+
+# 添加基于LangChain的AI接口类
+class LangChainClient:
+    """基于LangChain的AI接口，可以替代DeepSeekClient"""
+    
+    def __init__(self):
+        # 获取必要的环境变量
+        self.api_key = os.getenv("OPENAI_API_KEY", "")
+        self.model_name = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+        
+        # 记录是否使用有效的API密钥
+        self.has_valid_key = bool(self.api_key)
+        
+        if not self.has_valid_key:
+            logger.warning("未设置OPENAI_API_KEY环境变量，API调用将失败")
+        
+        # 创建LangChain LLM客户端
+        self.llm = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.7,
+            api_key=self.api_key
+        )
+        
+        logger.info(f"LangChain客户端初始化，使用模型: {self.model_name}")
+    
+    async def generate_content(self, prompt: str) -> str:
+        """使用LangChain生成文本内容"""
+        try:
+            if not self.has_valid_key:
+                return "API密钥未配置，无法调用LLM API"
+            
+            # 创建消息
+            messages = [HumanMessage(content=prompt)]
+            
+            # 调用LLM
+            response = await self.llm.ainvoke(messages)
+            
+            # 提取生成的文本
+            return response.content
+            
+        except Exception as e:
+            logger.error(f"LangChain API调用失败: {e}")
+            raise Exception(f"LangChain API调用失败: {e}")
+    
+    async def generate_with_history(self, messages: List[Dict[str, str]]) -> str:
+        """使用LangChain生成带有对话历史的文本内容"""
+        try:
+            if not self.has_valid_key:
+                return "API密钥未配置，无法调用LLM API"
+            
+            # 转换消息格式为LangChain格式
+            langchain_messages: List[BaseMessage] = []
+            for msg in messages:
+                if msg["role"] == "user":
+                    langchain_messages.append(HumanMessage(content=msg["content"]))
+                elif msg["role"] == "assistant":
+                    langchain_messages.append(AIMessage(content=msg["content"]))
+            
+            # 调用LLM
+            response = await self.llm.ainvoke(langchain_messages)
+            
+            # 提取生成的文本
+            return response.content
+            
+        except Exception as e:
+            logger.error(f"LangChain API带历史记录调用失败: {e}")
+            raise Exception(f"LangChain API带历史记录调用失败: {e}")
+    
+    async def get_structured_output(self, prompt: str, output_schema: Dict[str, Any]) -> Dict[str, Any]:
+        """使用LangChain生成结构化JSON输出"""
+        try:
+            from langchain_core.output_parsers import JsonOutputParser
+            from langchain_core.prompts import ChatPromptTemplate
+            
+            # 创建解析器
+            parser = JsonOutputParser(pydantic_object=output_schema)
+            
+            # 创建提示模板
+            template = ChatPromptTemplate.from_messages([
+                ("human", "{input}\n\n请以JSON格式输出，遵循以下结构:\n{format_instructions}")
+            ])
+            
+            # 创建链
+            chain = template | self.llm | parser
+            
+            # 调用链
+            result = await chain.ainvoke({
+                "input": prompt,
+                "format_instructions": parser.get_format_instructions()
+            })
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"LangChain结构化输出调用失败: {e}")
+            raise Exception(f"LangChain结构化输出调用失败: {e}") 
