@@ -22,18 +22,14 @@ from utils.deepseek_client import DeepSeekClient, LangChainClient
 
 # 初始化AI客户端
 deepseek_client = DeepSeekClient()
-use_langchain = os.getenv("USE_LANGCHAIN", "false").lower() == "true"
-langchain_client = LangChainClient()
+use_langchain = False  # 强制使用原生DeepSeek客户端
+langchain_client = None  # 不再初始化LangChain客户端
 
 def get_llm():
     """获取活跃的LLM"""
-    if use_langchain or not deepseek_client.has_valid_key:
-        print("使用LangChain LLM")
-        return langchain_client.llm
-    else:
-        print("使用DeepSeek LLM")
-        # 这里需要确保deepseek_client有llm属性
-        return deepseek_client.llm
+    print("使用DeepSeek LLM")
+    # 返回llm属性，而不是deepseek_client本身
+    return deepseek_client.llm
 
 # ===============================
 # 状态和模型定义
@@ -92,7 +88,11 @@ def create_title_chain() -> Runnable:
     ])
     
     # 创建链
-    chain = prompt | get_llm() | StrOutputParser()
+    # 使用通用处理方式
+    llm = get_llm()
+    
+    # 组装链
+    chain = prompt | llm | StrOutputParser()
     
     return chain
 
@@ -232,26 +232,94 @@ def create_outline_chain() -> Runnable:
         ("human", user_template)
     ])
     
+    # 获取模型
+    llm = get_llm()
+    
     # 创建解析器
     parser = JsonOutputParser(pydantic_object=OutlineResponse)
     
     # 创建链
-    chain = prompt | get_llm() | parser
+    chain = prompt | llm | parser
     
     return chain
 
-def validate_outline(outline: List[OutlineSection], topic: str) -> List[Dict[str, Any]]:
+def validate_outline(outline: Union[List[OutlineSection], List[Dict[str, Any]], Any], topic: str) -> List[Dict[str, Any]]:
     """验证和规范化大纲"""
     validated_outline = []
     
+    # 处理可能的字符串输入 (JSON字符串)
+    if isinstance(outline, str):
+        try:
+            outline = json.loads(outline)
+        except:
+            # 如果无法解析，创建默认大纲
+            return [
+                {
+                    "title": "主题概述",
+                    "content": ["背景介绍", "核心问题", "主要目标"]
+                },
+                {
+                    "title": f"{topic}分析",
+                    "content": ["关键发现", "重要观点", "数据解读"]
+                },
+                {
+                    "title": "总结与展望",
+                    "content": ["主要结论", "应用建议", "未来展望"]
+                }
+            ]
+    
+    # 确保outline是列表
+    if not isinstance(outline, list):
+        # 尝试获取可能的outline字段
+        if isinstance(outline, dict) and "outline" in outline:
+            outline = outline["outline"]
+        else:
+            # 创建默认大纲
+            return [
+                {
+                    "title": "主题概述",
+                    "content": ["背景介绍", "核心问题", "主要目标"]
+                },
+                {
+                    "title": f"{topic}分析",
+                    "content": ["关键发现", "重要观点", "数据解读"]
+                },
+                {
+                    "title": "总结与展望",
+                    "content": ["主要结论", "应用建议", "未来展望"]
+                }
+            ]
+    
     for section in outline:
+        # 处理不同类型的输入
+        if isinstance(section, dict):
+            section_title = section.get("title", "")
+            section_content = section.get("content", [])
+        else:
+            # 尝试获取属性
+            try:
+                section_title = section.title
+                section_content = section.content
+            except:
+                section_title = ""
+                section_content = []
+        
         # 检查标题
-        section_title = section.title
         if not section_title or section_title == "章节标题":
             section_title = f"{topic}分析"
             
+        # 确保section_content是列表
+        if not isinstance(section_content, list):
+            try:
+                # 尝试将字符串分割成列表
+                if isinstance(section_content, str):
+                    section_content = [item.strip() for item in section_content.split(',')]
+                else:
+                    section_content = ["背景介绍", "关键概念", "应用场景"]
+            except:
+                section_content = ["背景介绍", "关键概念", "应用场景"]
+        
         # 检查内容
-        section_content = section.content
         if not section_content or len(section_content) == 0:
             section_content = ["背景介绍", "关键概念", "应用场景"]
         else:
@@ -295,8 +363,14 @@ async def generate_outline_node(state: DocumentState) -> Dict[str, Any]:
         # 调用链生成大纲
         outline_result = await outline_chain.ainvoke(params)
         
+        # 处理结果，可能是字典或OutlineResponse对象
+        if isinstance(outline_result, dict):
+            outline_data = outline_result.get("outline", [])
+        else:
+            outline_data = outline_result.outline
+            
         # 验证和规范化大纲
-        validated_outline = validate_outline(outline_result.outline, state["topic"])
+        validated_outline = validate_outline(outline_data, state["topic"])
         
         print(f"生成大纲成功: {len(validated_outline)}个章节")
         
@@ -590,8 +664,6 @@ def create_complete_workflow() -> Runnable:
     workflow.add_edge("generate_outline", "generate_content")
     workflow.add_edge("generate_content", END)
     
-    # 设置工作流条件
-    
     # 当标题或大纲生成失败时的路由
     def route_on_error(state: DocumentState):
         if state.get("error_message"):
@@ -619,16 +691,28 @@ def create_complete_workflow() -> Runnable:
     # 设置入口点
     workflow.set_entry_point("generate_title")
     
-    # 编译工作流
-    return workflow.compile(configurable={"entry_point": True})
+    # 编译工作流 - 更新为适配LangGraph 0.3.0+版本
+    return workflow.compile()
 
 async def run_document_workflow(
     topic: str,
     page_limit: int,
     document_type: str,
-    initial_state: Optional[DocumentState] = None
+    initial_state: Optional[DocumentState] = None,
+    stop_at: Optional[str] = None  # 添加stop_at参数
 ) -> DocumentState:
-    """运行完整的文档生成工作流"""
+    """运行文档生成工作流，可以在指定步骤停止
+    
+    Args:
+        topic: 文档主题
+        page_limit: 页数限制
+        document_type: 文档类型 ("ppt" 或 "word")
+        initial_state: 可选的初始状态，用于从特定阶段开始工作流
+        stop_at: 可选，工作流执行到此步骤后停止，例如 "title_generated" 或 "outline_generated"
+        
+    Returns:
+        完成的工作流状态
+    """
     # 初始化状态
     if initial_state is None:
         initial_state = {
@@ -652,29 +736,60 @@ async def run_document_workflow(
     # 创建工作流
     workflow = create_complete_workflow()
     
-    # 确定入口点
+    # 确定入口点 - 在新版LangGraph中需要手动处理不同的入口点
     entry_point = "generate_title"  # 默认从开始
     
-    if initial_state.get("title"):
-        if not initial_state.get("outline"):
-            entry_point = "generate_outline"
-        elif not initial_state.get("content"):
-            entry_point = "generate_content"
-            
     # 记录工作流执行开始
     print(f"开始执行文档生成工作流，入口点: {entry_point}")
     print(f"主题: {topic}, 页数: {page_limit}, 文档类型: {document_type}")
     
     # 运行工作流
     try:
-        # 使用配置的入口点
-        config = {"entry_point": entry_point}
-        result = await workflow.ainvoke(initial_state, config)
+        # 根据当前状态和stop_at参数决定执行策略
+        current_step = initial_state.get("current_step", "started")
+        
+        # 如果当前已经达到停止步骤，直接返回
+        if stop_at and current_step == stop_at:
+            return initial_state
+            
+        # 只生成标题
+        if current_step == "started":
+            result = await generate_title_node(initial_state)
+            initial_state.update(result)
+            
+            # 如果设置了在生成标题后停止，则返回
+            if stop_at == "title_generated":
+                return initial_state
+        
+        # 只生成大纲
+        if current_step in ["started", "title_generated"] and initial_state.get("title"):
+            if current_step == "title_generated" or initial_state.get("current_step") == "title_generated":
+                outline_result = await generate_outline_node(initial_state)
+                initial_state.update(outline_result)
+                
+                # 如果设置了在生成大纲后停止，则返回
+                if stop_at == "outline_generated":
+                    return initial_state
+        
+        # 只生成内容
+        if current_step in ["started", "title_generated", "outline_generated"] and initial_state.get("outline"):
+            if current_step == "outline_generated" or initial_state.get("current_step") == "outline_generated":
+                content_result = await generate_content_node(initial_state)
+                initial_state.update(content_result)
+                
+                # 如果设置了在生成内容后停止，则返回
+                if stop_at == "content_generated":
+                    return initial_state
+        
+        # 如果未设置停止点，或者当前状态不符合分步执行的条件，执行完整工作流
+        if not stop_at and (current_step == "started" or not initial_state.get("content")):
+            result = await workflow.ainvoke(initial_state)
+            initial_state = result
         
         # 记录工作流完成
-        print(f"文档生成工作流完成: {result.get('current_step')}")
+        print(f"文档生成工作流完成: {initial_state.get('current_step')}")
         
-        return result
+        return initial_state
         
     except Exception as e:
         # 记录错误

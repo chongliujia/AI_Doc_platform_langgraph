@@ -139,14 +139,14 @@ def generate_default_outline(topic: str, page_limit: int):
 # 为了兼容现有API，我们提供与原始函数签名匹配的包装器
 
 # 1. 标题智能体包装器
-async def generate_title(topic: str, document_type: str):
+async def generate_title(topic: str, document_type: str, page_limit: int = 10):
     """根据主题生成标题（LangGraph实现）"""
     try:
         # 运行工作流，只执行到标题生成步骤
         initial_state: DocumentState = {
             "topic": topic,
             "document_type": document_type,
-            "page_limit": 10,  # 默认值
+            "page_limit": page_limit,  # 使用传入的页数参数
             "current_step": "started",
             "error_message": None,
             "title": None,
@@ -159,9 +159,10 @@ async def generate_title(topic: str, document_type: str):
         # 配置只运行到标题生成
         result = await run_document_workflow(
             topic=topic,
-            page_limit=10,  # 默认值，标题生成不需要准确的页数
+            page_limit=page_limit,  # 使用传入的页数参数
             document_type=document_type,
-            initial_state=initial_state
+            initial_state=initial_state,
+            stop_at="title_generated"  # 在生成标题后停止
         )
         
         success = result["current_step"] == "title_generated"
@@ -203,12 +204,13 @@ async def generate_outline(topic: str, title: str, page_limit: int, document_typ
             "user_edited_title": False
         }
         
-        # 配置从标题生成之后运行
+        # 配置从标题生成之后运行，到大纲生成后停止
         result = await run_document_workflow(
             topic=topic,
             page_limit=page_limit,
             document_type=document_type,
-            initial_state=initial_state
+            initial_state=initial_state,
+            stop_at="outline_generated"  # 在生成大纲后停止
         )
         
         success = result["current_step"] == "outline_generated"
@@ -259,12 +261,13 @@ async def generate_content(title: str, topic: str, outline: List[Dict[str, Any]]
             "user_edited_title": False
         }
         
-        # 配置从大纲生成之后运行
+        # 配置从大纲生成之后运行，到内容生成后停止
         result = await run_document_workflow(
             topic=topic,
             page_limit=page_limit or 15,
             document_type=document_type,
-            initial_state=initial_state
+            initial_state=initial_state,
+            stop_at="content_generated"  # 在生成内容后停止
         )
         
         success = result["current_step"] == "content_generated"
@@ -327,18 +330,19 @@ def create_document_workflow():
     return create_complete_workflow()
 
 # 提供一个运行完整工作流的函数
-async def run_document_workflow(topic: str, page_limit: int, document_type: str, initial_state: Optional[DocumentState] = None) -> DocumentState:
-    """运行完整的文档生成工作流
+async def run_document_workflow(topic: str, page_limit: int, document_type: str, initial_state: Optional[DocumentState] = None, stop_at: Optional[str] = None) -> DocumentState:
+    """运行文档生成工作流，可以在指定步骤停止
     
     Args:
         topic: 文档主题
         page_limit: 页数限制
         document_type: 文档类型 ("ppt" 或 "word")
         initial_state: 可选的初始状态，用于从特定阶段开始工作流
+        stop_at: 可选，工作流执行到此步骤后停止，例如 "title_generated" 或 "outline_generated"
         
     Returns:
         完成的工作流状态
     """
     # 这里直接调用langgraph_impl中的实现，确保行为一致
     from api.langgraph_impl import run_document_workflow as run_workflow_impl
-    return await run_workflow_impl(topic, page_limit, document_type, initial_state) 
+    return await run_workflow_impl(topic, page_limit, document_type, initial_state, stop_at) 

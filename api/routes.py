@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import os
 import traceback
@@ -7,7 +7,7 @@ import json
 import logging
 import uuid
 
-from api.graph import run_document_workflow
+from api.graph import run_document_workflow, generate_outline, generate_title
 from utils.document_generator import DocumentGenerator
 
 # 设置日志
@@ -22,6 +22,13 @@ class DocumentRequest(BaseModel):
     page_limit: int
     document_type: str  # "ppt" 或 "word"
 
+# 大纲生成请求模型
+class OutlineRequest(BaseModel):
+    topic: str
+    title: str
+    page_limit: int
+    document_type: str = "ppt"
+
 # 大纲条目模型
 class OutlineItem(BaseModel):
     title: str
@@ -34,6 +41,15 @@ class OutlineEditRequest(BaseModel):
 # 标题编辑模型
 class TitleEditRequest(BaseModel):
     title: str
+
+# 大纲响应模型
+class OutlineResponse(BaseModel):
+    success: bool
+    outline: List[Dict[str, Any]]
+    estimated_pages: int
+    error: Optional[str] = None
+    title: str
+    request_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
 
 # 响应模型
 class WorkflowResponse(BaseModel):
@@ -51,6 +67,70 @@ class GenerateDocumentResponse(BaseModel):
 
 # 内存存储（实际应用中应使用数据库）
 document_requests = {}
+
+# 添加兼容旧API的大纲生成端点
+@router.post("/generate-outline", response_model=OutlineResponse)
+async def api_generate_outline(request: DocumentRequest):
+    """生成文档大纲API"""
+    try:
+        logger.info(f"收到大纲生成请求: 主题={request.topic}, 页数={request.page_limit}, 类型={request.document_type}")
+        
+        # 首先生成标题
+        title_result = await generate_title(request.topic, request.document_type, request.page_limit)
+        title = title_result["title"]
+        
+        logger.info(f"生成的标题: {title}")
+        
+        # 然后调用大纲生成函数
+        outline_result = await generate_outline(
+            topic=request.topic,
+            title=title,
+            page_limit=request.page_limit,
+            document_type=request.document_type
+        )
+        
+        logger.info(f"大纲生成完成，包含{len(outline_result['outline'])}个章节")
+        
+        # 生成唯一请求ID
+        request_id = str(uuid.uuid4())
+        
+        # 保存请求数据到内存存储，便于后续使用
+        document_requests[request_id] = {
+            "topic": request.topic,
+            "title": title,
+            "outline": outline_result["outline"],
+            "document_type": request.document_type,
+            "page_limit": request.page_limit,
+            "content": None,
+            "user_edited_title": False,
+            "user_edited_outline": False
+        }
+        
+        return {
+            "success": outline_result["success"],
+            "outline": outline_result["outline"],
+            "estimated_pages": outline_result.get("estimated_pages", request.page_limit),
+            "error": outline_result.get("error"),
+            "title": title,
+            "request_id": request_id
+        }
+        
+    except Exception as e:
+        logger.error(f"大纲生成异常: {e}")
+        logger.error(traceback.format_exc())
+        
+        # 使用graph.py中的默认大纲
+        from api.graph import generate_default_outline
+        default_data = generate_default_outline(request.topic, request.page_limit)
+        
+        return {
+            "success": False,
+            "outline": default_data["outline"],
+            "estimated_pages": default_data["estimated_pages"],
+            "error": f"大纲生成失败: {str(e)}",
+            "title": f"{request.topic}研究分析",
+            "request_id": str(uuid.uuid4())
+        }
 
 @router.post("/document-workflow", response_model=WorkflowResponse)
 async def document_workflow(request: DocumentRequest):
@@ -221,6 +301,13 @@ async def edit_workflow_outline(request_id: str, outline_edit: OutlineEditReques
         logger.error(f"详细错误: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"编辑大纲失败: {str(e)}")
 
+# 添加别名端点，使/api/edit-outline/{request_id}也能工作
+@router.put("/edit-outline/{request_id}", response_model=WorkflowResponse)
+async def edit_outline_alias(request_id: str, outline_edit: OutlineEditRequest):
+    """编辑文档大纲的别名端点，转发到edit_workflow_outline"""
+    logger.info(f"通过别名端点收到大纲编辑请求: request_id={request_id}")
+    return await edit_workflow_outline(request_id, outline_edit)
+
 @router.post("/generate-document/{request_id}", response_model=GenerateDocumentResponse)
 async def generate_document(request_id: str, background_tasks: BackgroundTasks):
     """根据LangGraph工作流生成的内容，生成最终文档"""
@@ -305,6 +392,11 @@ async def regenerate_content(request_id: str):
         # 获取原始请求数据
         request_data = document_requests[request_id]
         
+        # 记录重要信息以便调试
+        logger.info(f"开始内容生成，标题: {request_data['title']}")
+        logger.info(f"大纲章节数: {len(request_data['outline'])}")
+        logger.info(f"大纲第一章节: {request_data['outline'][0]['title'] if request_data['outline'] else 'N/A'}")
+        
         # 重新运行工作流，只执行内容生成阶段
         # 创建一个已包含标题和大纲的初始状态
         initial_state = {
@@ -316,17 +408,27 @@ async def regenerate_content(request_id: str):
             "title": request_data["title"],
             "outline": request_data["outline"],
             "content": None,
-            "user_edited_outline": request_data["user_edited_outline"],
-            "user_edited_title": request_data["user_edited_title"]
+            "user_edited_outline": True,  # 标记为用户已编辑，确保使用用户修改的版本
+            "user_edited_title": request_data.get("user_edited_title", False)
         }
         
         # 运行工作流获取新内容
+        logger.info("开始调用工作流生成内容...")
         workflow_result = await run_document_workflow(
             topic=request_data["topic"],
             page_limit=request_data["page_limit"],
             document_type=request_data["document_type"],
-            initial_state=initial_state
+            initial_state=initial_state,
+            stop_at="content_generated"  # 执行到内容生成后停止
         )
+        
+        # 检查结果
+        if workflow_result.get("content"):
+            logger.info(f"内容生成成功，章节数: {len(workflow_result['content'])}")
+            for chapter in workflow_result["content"].keys():
+                logger.info(f"已生成章节: {chapter}")
+        else:
+            logger.warning("内容生成结果为空")
         
         # 更新请求数据的内容
         request_data["content"] = workflow_result["content"]
@@ -358,4 +460,11 @@ async def regenerate_content(request_id: str):
             "content": document_requests[request_id].get("content", {}),
             "request_id": request_id,
             "message": f"重新生成内容失败: {str(e)}"
-        } 
+        }
+
+# 添加别名端点，使/api/generate-content/{request_id}也能工作
+@router.post("/generate-content/{request_id}", response_model=WorkflowResponse)
+async def generate_content_alias(request_id: str):
+    """生成内容的别名端点，转发到regenerate_content"""
+    logger.info(f"通过别名端点收到内容生成请求: request_id={request_id}")
+    return await regenerate_content(request_id) 

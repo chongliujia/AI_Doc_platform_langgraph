@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import httpx
-from typing import Dict, Any, Optional, List, Union
+from typing import Dict, Any, Optional, List, Union, Type, Tuple, Mapping, cast
 import time
 import random
 from dotenv import load_dotenv
@@ -14,12 +14,122 @@ load_dotenv()
 
 # 添加langchain相关导入
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage, SystemMessage
+from langchain_core.callbacks.manager import AsyncCallbackManagerForLLMRun, CallbackManagerForLLMRun
+from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_openai import ChatOpenAI
 
 # 设置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+class DeepSeekLangChain(BaseChatModel):
+    """DeepSeek API客户端的LangChain包装器"""
+    
+    client_class: Type = "DeepSeekLangChain"
+    client: Any  # 添加client字段
+    model_name: str = "deepseek-chat"  # 定义model_name字段
+    
+    class Config:
+        """Pydantic配置"""
+        arbitrary_types_allowed = True
+    
+    def __init__(self, client: "DeepSeekClient", **kwargs):
+        """初始化LangChain兼容的包装器
+        
+        Args:
+            client: DeepSeekClient实例
+        """
+        # 初始化父类
+        super().__init__(**kwargs)
+        # 设置属性
+        self._client = client  # 使用内部变量存储
+        self._model_name = client.model
+    
+    @property
+    def client(self):
+        """获取客户端"""
+        return self._client
+        
+    @property
+    def model_name(self):
+        """获取模型名称"""
+        return self._model_name
+    
+    @property
+    def _llm_type(self) -> str:
+        """获取LLM类型"""
+        return "deepseek"
+    
+    async def _agenerate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[AsyncCallbackManagerForLLMRun] = None,
+        **kwargs
+    ) -> ChatResult:
+        """异步生成文本
+        
+        Args:
+            messages: 消息列表
+            stop: 停止标记
+            run_manager: 回调管理器
+            
+        Returns:
+            ChatResult对象
+        """
+        prompt = self._convert_messages_to_prompt(messages)
+        
+        # 调用底层客户端
+        response = await self._client.generate_content(prompt)
+        
+        # 创建生成结果
+        message = AIMessage(content=response)
+        generation = ChatGeneration(message=message)
+        
+        return ChatResult(generations=[generation])
+    
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs
+    ) -> ChatResult:
+        """生成文本
+        
+        Args:
+            messages: 消息列表
+            stop: 停止标记
+            run_manager: 回调管理器
+            
+        Returns:
+            ChatResult对象
+        """
+        raise NotImplementedError("DeepSeekLangChain只支持异步操作")
+    
+    def _convert_messages_to_prompt(self, messages: List[BaseMessage]) -> str:
+        """将消息列表转换为单一提示文本
+        
+        Args:
+            messages: 消息列表
+            
+        Returns:
+            合并后的提示文本
+        """
+        prompt_parts = []
+        
+        for i, message in enumerate(messages):
+            if isinstance(message, SystemMessage):
+                prompt_parts.append(f"系统: {message.content}")
+            elif isinstance(message, HumanMessage):
+                prompt_parts.append(f"用户: {message.content}")
+            elif isinstance(message, AIMessage):
+                prompt_parts.append(f"助手: {message.content}")
+            else:
+                prompt_parts.append(f"消息{i}: {message.content}")
+        
+        return "\n\n".join(prompt_parts)
 
 class DeepSeekClient:
     """DeepSeek API客户端"""
@@ -41,6 +151,27 @@ class DeepSeekClient:
             "timeout": httpx.Timeout(self.timeout),
             "follow_redirects": True
         }
+
+        # 添加has_valid_key属性
+        self.has_valid_key = bool(self.api_key)
+        
+        # 添加llm属性，用于与LangChain集成
+        self.llm = DeepSeekLangChain(self)
+    
+    async def ainvoke(self, messages):
+        """实现与LangChain兼容的接口"""
+        if isinstance(messages, list):
+            # 提取消息内容
+            prompt = messages[0].content if messages else ""
+        else:
+            prompt = str(messages)
+            
+        # 调用generate_content方法
+        content = await self.generate_content(prompt)
+        
+        # 返回AIMessage格式的响应
+        from langchain_core.messages import AIMessage
+        return AIMessage(content=content)
     
     async def generate_content(self, prompt: str, max_tokens: int = 2000) -> str:
         """生成内容
@@ -180,23 +311,36 @@ class LangChainClient:
     
     def __init__(self):
         # 获取必要的环境变量
-        self.api_key = os.getenv("OPENAI_API_KEY", "")
-        self.model_name = os.getenv("LLM_MODEL", "gpt-3.5-turbo")
+        self.api_key = os.getenv("DEEPSEEK_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
+        self.model_name = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
         
         # 记录是否使用有效的API密钥
         self.has_valid_key = bool(self.api_key)
         
         if not self.has_valid_key:
-            logger.warning("未设置OPENAI_API_KEY环境变量，API调用将失败")
+            logger.warning("未设置API密钥环境变量，API调用将失败")
         
         # 创建LangChain LLM客户端
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=0.7,
-            api_key=self.api_key
-        )
+        # 使用DeepSeek模型
+        from langchain_community.chat_models import ChatDeepseek
         
-        logger.info(f"LangChain客户端初始化，使用模型: {self.model_name}")
+        # 尝试使用DeepSeek模型
+        try:
+            self.llm = ChatDeepseek(
+                model=self.model_name,
+                temperature=0.7,
+                deepseek_api_key=self.api_key
+            )
+            logger.info(f"LangChain客户端初始化，使用模型: {self.model_name} 模型类型：DeepSeek")
+        except Exception as e:
+            # 如果DeepSeek初始化失败，回退到OpenAI
+            logger.warning(f"DeepSeek初始化失败: {e}，回退到OpenAI模型")
+            self.llm = ChatOpenAI(
+                model="gpt-3.5-turbo",
+                temperature=0.7,
+                api_key=self.api_key
+            )
+            logger.info(f"LangChain客户端初始化，使用模型: gpt-3.5-turbo (回退)")
     
     async def generate_content(self, prompt: str) -> str:
         """使用LangChain生成文本内容"""

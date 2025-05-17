@@ -112,8 +112,8 @@ function renderOutline(title, outline) {
 function createSectionElement(section, sectionIndex) {
     const sectionDiv = document.createElement('div');
     sectionDiv.className = 'outline-section';
-    sectionDiv.dataset.index = sectionIndex;
-
+    sectionDiv.dataset.index = sectionIndex + 1; // 使用1开始的索引，对用户更友好
+    
     // 章节标题
     const headerDiv = document.createElement('div');
     headerDiv.className = 'outline-section-header';
@@ -122,7 +122,70 @@ function createSectionElement(section, sectionIndex) {
     titleInput.type = 'text';
     titleInput.className = 'form-control outline-section-title';
     titleInput.value = section.title;
-    titleInput.placeholder = '章节标题';
+    titleInput.placeholder = '请输入有意义的章节标题';
+    
+    // 添加标题提示和自动调整功能
+    titleInput.maxLength = 50; // 限制最大长度
+    titleInput.title = "章节标题应简明扼要，能够清晰表达本章内容";
+    
+    // 添加输入事件监听器，自动调整字体大小
+    titleInput.addEventListener('input', function() {
+        if (this.value.length > 30) {
+            this.style.fontSize = '0.95rem';
+        } else {
+            this.style.fontSize = '1.1rem';
+        }
+        
+        // 如果标题为空，添加提示类
+        if (this.value.trim() === '') {
+            this.classList.add('empty-title');
+        } else {
+            this.classList.remove('empty-title');
+        }
+    });
+    
+    // 添加聚焦事件
+    titleInput.addEventListener('focus', function() {
+        // 创建临时提示元素
+        if (!document.getElementById('title-tooltip')) {
+            const tooltip = document.createElement('div');
+            tooltip.id = 'title-tooltip';
+            tooltip.className = 'title-tooltip';
+            tooltip.textContent = '好的章节标题应该简洁明了，能够概括本章要点';
+            document.body.appendChild(tooltip);
+            
+            // 定位提示元素
+            const rect = this.getBoundingClientRect();
+            tooltip.style.position = 'absolute';
+            tooltip.style.top = (rect.bottom + window.scrollY + 5) + 'px';
+            tooltip.style.left = (rect.left + window.scrollX) + 'px';
+            tooltip.style.backgroundColor = '#333';
+            tooltip.style.color = '#fff';
+            tooltip.style.padding = '5px 10px';
+            tooltip.style.borderRadius = '4px';
+            tooltip.style.fontSize = '12px';
+            tooltip.style.zIndex = '1000';
+            tooltip.style.opacity = '0';
+            tooltip.style.transition = 'opacity 0.3s';
+            
+            // 显示提示
+            setTimeout(() => {
+                tooltip.style.opacity = '1';
+            }, 100);
+        }
+    });
+    
+    // 添加失焦事件
+    titleInput.addEventListener('blur', function() {
+        // 移除提示元素
+        const tooltip = document.getElementById('title-tooltip');
+        if (tooltip) {
+            tooltip.style.opacity = '0';
+            setTimeout(() => {
+                tooltip.remove();
+            }, 300);
+        }
+    });
     
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'outline-actions';
@@ -141,7 +204,17 @@ function createSectionElement(section, sectionIndex) {
     deleteBtn.textContent = '删除章节';
     deleteBtn.onclick = function() {
         if (confirm('确定要删除此章节吗？')) {
-            sectionDiv.remove();
+            // 添加渐变消失动画
+            sectionDiv.style.transition = 'opacity 0.3s, transform 0.3s';
+            sectionDiv.style.opacity = '0';
+            sectionDiv.style.transform = 'translateX(10px)';
+            
+            // 等待动画完成后移除元素
+            setTimeout(() => {
+                sectionDiv.remove();
+                // 更新所有章节的序号
+                updateSectionNumbers();
+            }, 300);
         }
     };
     
@@ -172,6 +245,17 @@ function createContentItemElement(content = '', pointIndex) {
     itemDiv.className = 'content-item';
     itemDiv.dataset.index = pointIndex;
     
+    // 添加序号标签
+    const numberLabel = document.createElement('span');
+    numberLabel.className = 'point-number';
+    numberLabel.textContent = (pointIndex + 1) + '.';
+    numberLabel.style.marginRight = '8px';
+    numberLabel.style.color = '#6c757d';
+    numberLabel.style.fontWeight = '500';
+    numberLabel.style.minWidth = '25px';
+    numberLabel.style.display = 'inline-block';
+    numberLabel.style.textAlign = 'right';
+    
     const contentInput = document.createElement('input');
     contentInput.type = 'text';
     contentInput.className = 'form-control content-input';
@@ -182,14 +266,50 @@ function createContentItemElement(content = '', pointIndex) {
     deleteBtn.type = 'button';
     deleteBtn.className = 'btn btn-outline-danger btn-sm';
     deleteBtn.innerHTML = '&times;';
+    deleteBtn.title = '删除此要点';
+    deleteBtn.style.marginLeft = '8px';
     deleteBtn.onclick = function() {
-        itemDiv.remove();
+        // 添加渐变消失动画
+        itemDiv.style.transition = 'opacity 0.3s, transform 0.3s';
+        itemDiv.style.opacity = '0';
+        itemDiv.style.transform = 'translateX(10px)';
+        
+        // 等待动画完成后移除元素
+        setTimeout(() => {
+            itemDiv.remove();
+            // 更新其他要点的序号
+            updatePointNumbers();
+        }, 300);
     };
     
+    itemDiv.appendChild(numberLabel);
     itemDiv.appendChild(contentInput);
     itemDiv.appendChild(deleteBtn);
     
     return itemDiv;
+}
+
+// 更新要点序号
+function updatePointNumbers() {
+    const sections = document.querySelectorAll('.outline-section');
+    sections.forEach(section => {
+        const points = section.querySelectorAll('.content-item');
+        points.forEach((point, index) => {
+            const numberLabel = point.querySelector('.point-number');
+            if (numberLabel) {
+                numberLabel.textContent = (index + 1) + '.';
+            }
+            point.dataset.index = index;
+        });
+    });
+}
+
+// 更新章节序号
+function updateSectionNumbers() {
+    const sections = document.querySelectorAll('.outline-section');
+    sections.forEach((section, index) => {
+        section.dataset.index = index + 1;
+    });
 }
 
 // 添加新章节
@@ -205,7 +325,31 @@ function addNewSection() {
         document.querySelectorAll('.outline-section').length
     );
     
+    // 先隐藏新章节，准备添加动画
+    sectionElement.style.opacity = '0';
+    sectionElement.style.transform = 'translateY(20px)';
+    sectionElement.style.transition = 'opacity 0.5s, transform 0.5s';
+    
     outlineContainer.appendChild(sectionElement);
+    
+    // 更新所有章节的序号
+    updateSectionNumbers();
+    
+    // 触发布局更新，然后添加动画
+    setTimeout(() => {
+        sectionElement.style.opacity = '1';
+        sectionElement.style.transform = 'translateY(0)';
+        
+        // 自动聚焦到新章节的标题输入框
+        const titleInput = sectionElement.querySelector('.outline-section-title');
+        if (titleInput) {
+            titleInput.focus();
+            titleInput.select();
+        }
+    }, 10);
+    
+    // 滚动到新添加的章节
+    sectionElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // 添加内容项
@@ -236,7 +380,7 @@ async function saveOutline() {
     
     try {
         // 首先更新大纲
-        const updateResponse = await fetch(`/api/edit-outline/${currentRequestId}`, {
+        const updateResponse = await fetch(`/api/edit-workflow-outline/${currentRequestId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json'
@@ -251,9 +395,23 @@ async function saveOutline() {
             throw new Error(errorData.detail || '更新大纲失败');
         }
         
-        // 然后生成文档
+        // 显示步骤3（内容生成中）
         showStep(3);
+        document.getElementById('generation-status').textContent = '正在生成内容...';
         
+        // 生成内容（新增步骤）
+        const contentResponse = await fetch(`/api/regenerate-content/${currentRequestId}`, {
+            method: 'POST'
+        });
+        
+        if (!contentResponse.ok) {
+            const errorData = await contentResponse.json();
+            throw new Error(errorData.detail || '生成内容失败');
+        }
+        
+        document.getElementById('generation-status').textContent = '正在生成文档...';
+        
+        // 最后生成文档
         const generateResponse = await fetch(`/api/generate-document/${currentRequestId}`, {
             method: 'POST'
         });
@@ -297,7 +455,9 @@ function showStep(stepNumber) {
     });
     
     // 显示当前步骤
-    document.getElementById(`step${stepNumber}-content`).style.display = 'block';
+    if (stepNumber <= 3) {
+        document.getElementById(`step${stepNumber}-content`).style.display = 'block';
+    }
     
     // 重置步骤3的状态
     if (stepNumber === 3) {
