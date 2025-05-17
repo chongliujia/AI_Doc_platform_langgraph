@@ -8,6 +8,7 @@ import json
 import traceback
 import re
 import os
+import asyncio
 
 # LangChain和LangGraph导入
 from langchain_core.prompts import ChatPromptTemplate, PromptTemplate, MessagesPlaceholder
@@ -19,6 +20,9 @@ from pydantic import BaseModel, Field
 
 # 导入实用工具
 from utils.deepseek_client import DeepSeekClient, LangChainClient
+
+# 进度跟踪变量 - 从state.py导入
+from api.state import generation_progress
 
 # 初始化AI客户端
 deepseek_client = DeepSeekClient()
@@ -568,16 +572,60 @@ async def generate_content_node(state: DocumentState) -> Dict[str, Any]:
     """内容生成节点"""
     try:
         print(f"内容智能体：正在为'{state['title']}'生成详细内容...")
+        request_id = state.get("request_id")
+        
+        # 初始化进度信息
+        if request_id:
+            generation_progress[request_id] = {
+                "progress": 5,
+                "current_stage": "preparing",
+                "message": "正在准备生成详细内容...",
+                "current_section": None,
+                "completed_sections": []
+            }
+            # 给客户端时间获取初始状态
+            await asyncio.sleep(0.5)
         
         outline = state["outline"]
         content_dict = {}
         success_count = 0
         error_count = 0
+        total_sections = len(outline)
+        
+        # 更新进度 - 分析阶段
+        if request_id:
+            generation_progress[request_id].update({
+                "progress": 15,
+                "current_stage": "analyzing",
+                "message": "正在分析大纲内容..."
+            })
+            await asyncio.sleep(0.5)
+            
+        # 更新进度 - 研究阶段
+        if request_id:
+            generation_progress[request_id].update({
+                "progress": 30,
+                "current_stage": "researching",
+                "message": "正在收集相关信息..."
+            })
+            await asyncio.sleep(1.0)
         
         # 为每个章节生成内容
-        for section in outline:
+        for index, section in enumerate(outline):
             section_title = section["title"]
             section_points = section["content"]
+            
+            # 更新当前正在处理的章节
+            if request_id:
+                current_progress = 30 + int(50 * (index / total_sections))
+                generation_progress[request_id].update({
+                    "progress": current_progress,
+                    "current_stage": "generating",
+                    "message": f"正在生成章节: {section_title}",
+                    "current_section": section_title
+                })
+                # 重要：确保请求在更新进度状态后能获取到最新的状态
+                await asyncio.sleep(0.1)
             
             try:
                 print(f"正在生成章节'{section_title}'的内容...")
@@ -597,6 +645,23 @@ async def generate_content_node(state: DocumentState) -> Dict[str, Any]:
                 success_count += 1
                 print(f"成功生成章节'{section_title}'的内容")
                 
+                # 更新已完成的章节
+                if request_id:
+                    completed_sections = generation_progress[request_id].get("completed_sections", [])
+                    completed_sections.append(section_title)
+                    generation_progress[request_id]["completed_sections"] = completed_sections
+                    
+                    # 更新进度消息
+                    next_section = outline[index + 1]["title"] if index + 1 < len(outline) else None
+                    if next_section:
+                        generation_progress[request_id].update({
+                            "message": f"正在生成章节: {next_section}",
+                            "current_section": next_section,
+                        })
+                    
+                    # 确保客户端能及时获取更新状态
+                    await asyncio.sleep(0.1)
+                    
             except Exception as section_error:
                 print(f"生成章节'{section_title}'内容时出错: {section_error}")
                 
@@ -608,8 +673,28 @@ async def generate_content_node(state: DocumentState) -> Dict[str, Any]:
                 content_dict[section_title] = default_content
                 error_count += 1
         
+        # 更新进度 - 优化阶段
+        if request_id:
+            generation_progress[request_id].update({
+                "progress": 80,
+                "current_stage": "reviewing",
+                "message": "正在优化内容质量...",
+                "current_section": None
+            })
+            await asyncio.sleep(1.0)
+        
         # 确定成功状态
         overall_success = error_count == 0
+        
+        # 更新进度 - 完成阶段
+        if request_id:
+            generation_progress[request_id].update({
+                "progress": 100,
+                "current_stage": "completed",
+                "message": "内容生成完成！",
+                "current_section": None,
+                "completed_sections": [section["title"] for section in outline]
+            })
         
         # 创建状态更新
         status_update = {
@@ -625,6 +710,14 @@ async def generate_content_node(state: DocumentState) -> Dict[str, Any]:
     except Exception as e:
         print(f"内容生成节点错误: {e}")
         traceback.print_exc()
+        
+        # 更新进度 - 错误状态
+        if request_id:
+            generation_progress[request_id].update({
+                "progress": 0,
+                "current_stage": "error",
+                "message": f"生成内容时出错: {str(e)}",
+            })
         
         # 创建所有章节的默认内容
         content_dict = {}

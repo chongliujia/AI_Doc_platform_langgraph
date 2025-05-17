@@ -51,19 +51,19 @@
 
 /* 大纲编辑样式 */
 .outline-section {
-    background-color: #f8f9fa;
+    background-color: #ffffff;
     padding: 20px;
-    border-radius: 8px;
-    margin-bottom: 20px;
-    border: 1px solid #dee2e6;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    margin-bottom: 25px;
+    border: 1px solid #e0e6ed;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
     transition: all 0.3s ease;
     position: relative;
 }
 
 .outline-section:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(13, 110, 253, 0.1);
+    transform: translateY(-3px);
 }
 
 /* 添加章节序号 */
@@ -73,8 +73,8 @@
     left: -15px;
     top: 50%;
     transform: translateY(-50%);
-    width: 30px;
-    height: 30px;
+    width: 34px;
+    height: 34px;
     background-color: #0d6efd;
     color: white;
     border-radius: 50%;
@@ -83,7 +83,7 @@
     justify-content: center;
     font-weight: bold;
     font-size: 14px;
-    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.25);
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
 }
 
 .outline-section-header {
@@ -91,18 +91,19 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px dashed #dee2e6;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e9ecef;
+    position: relative;
 }
 
 .outline-section-header::before {
     content: "章节标题";
     position: absolute;
-    top: -10px;
+    top: -12px;
     left: 15px;
     background-color: #0d6efd;
     color: white;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
@@ -113,13 +114,15 @@
     flex-grow: 1;
     margin-right: 15px;
     font-weight: 600;
-    padding: 10px 15px;
-    border-radius: 6px;
+    padding: 8px 12px;
+    border-radius: 8px;
     border: 1px solid #ced4da;
-    transition: all 0.2s ease-in-out;
-    font-size: 1.1rem;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
     background-color: #f8f9fa;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    height: auto;
+    line-height: 1.4;
 }
 
 .outline-section-title:focus {
@@ -135,134 +138,196 @@
 
 .content-item {
     display: flex;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
     align-items: center;
+    position: relative;
+    transition: all 0.3s ease;
+    padding: 6px 8px;
+    border-radius: 6px;
+}
+
+.content-item:hover {
+    background-color: #f8f9fa;
 }
 
 .content-input {
     flex-grow: 1;
     margin-right: 10px;
-    padding: 8px 12px;
+    padding: 8px 10px;
     border-radius: 6px;
     border: 1px solid #ced4da;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    height: auto;
 }
 
 .content-input:focus {
-    border-color: #86b7fe;
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.20rem rgba(13, 110, 253, 0.2);
+    background-color: #fff;
+}
+
+.content-input:hover:not(:focus) {
+    border-color: #adb5bd;
+    background-color: #f1f3f5;
 }
 
 .point-number {
-    color: #6c757d;
-    font-weight: 500;
-    transition: color 0.2s ease;
+    color: #0d6efd;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    min-width: 25px;
+    display: inline-block;
+    text-align: right;
+    margin-right: 8px;
+    font-size: 0.9rem;
 }
 
 .content-item:hover .point-number {
-    color: #0d6efd;
+    color: #0a58ca;
+    transform: scale(1.05);
 }
 
 .outline-content {
-    background-color: #fff;
-    padding: 15px;
-    border-radius: 6px;
+    background-color: #f8f9fa;
+    padding: 18px;
+    border-radius: 8px;
     border: 1px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.outline-content:hover {
+    background-color: #f1f3f5;
+    border-color: #dee2e6;
+}
+
+.outline-actions {
+    display: flex;
+    align-items: center;
 }
 
 .outline-actions button {
     margin-left: 8px;
-    transition: all 0.2s ease;
+    transition: all 0.3s ease;
 }
 
 .outline-actions button:hover {
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 /* 添加删除按钮样式 */
 .btn-outline-danger {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
+    padding: 5px 8px;
+    font-size: 0.8rem;
     color: #dc3545;
     border-color: #dc3545;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: 6px;
+    transition: all 0.3s ease;
 }
 
 .btn-outline-danger:hover {
     background-color: #dc3545;
     color: white;
+    box-shadow: 0 2px 5px rgba(220, 53, 69, 0.3);
+}
+
+/* 删除要点按钮 */
+.content-item .btn-outline-danger {
+    opacity: 0.7;
+    transform: scale(0.9);
+}
+
+.content-item:hover .btn-outline-danger {
+    opacity: 1;
+    transform: scale(1);
 }
 
 /* 添加要点按钮样式 */
 .btn-outline-primary {
-    padding: 0.3rem 0.6rem;
-    font-size: 0.875rem;
-    transition: all 0.2s ease;
+    padding: 5px 10px;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .btn-outline-primary:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 2px 5px rgba(13, 110, 253, 0.2);
 }
 
-/* 其他样式 */
-.card {
-    border: none;
-    border-radius: 10px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    overflow: hidden;
+/* 添加要点按钮 */
+.btn-add-point {
+    margin-top: 15px;
+    width: 100%;
+    text-align: center;
+    background-color: #f8f9fa;
+    border: 1px dashed #adb5bd;
+    color: #6c757d;
+    padding: 6px 8px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 0.85rem;
 }
 
-.card-header {
-    border-radius: 10px 10px 0 0 !important;
-    padding: 1rem 1.5rem;
-    background-color: #0d6efd;
-    color: white;
+.btn-add-point:hover {
+    background-color: #e9ecef;
+    border-color: #0d6efd;
+    color: #0d6efd;
 }
 
-.card-body {
-    padding: 1.5rem;
-}
-
-.form-control:focus,
-.btn:focus {
-    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+.btn-add-point i {
+    margin-right: 5px;
 }
 
 /* 添加新章节按钮样式 */
 #add-section-btn {
     transition: all 0.3s ease;
     margin-right: 10px;
-    background-color: #0d6efd;
+    background-color: #198754;
     color: white;
     border: none;
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#add-section-btn::before {
+    content: "+";
+    font-weight: bold;
+    font-size: 1.2rem;
 }
 
 #add-section-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
-    background-color: #0b5ed7;
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(25, 135, 84, 0.3);
+    background-color: #157347;
 }
 
 /* 确认大纲按钮样式 */
 #confirm-outline-btn {
     transition: all 0.3s ease;
-    background-color: #198754;
+    background-color: #0d6efd;
     color: white;
     border: none;
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 500;
+    font-size: 0.9rem;
 }
 
 #confirm-outline-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(25, 135, 84, 0.2);
-    background-color: #157347;
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
+    background-color: #0b5ed7;
 }
 
 /* 返回按钮样式 */
@@ -272,13 +337,14 @@
     color: white;
     border: none;
     padding: 8px 16px;
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 500;
+    font-size: 0.9rem;
 }
 
 #back-to-step1-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(108, 117, 125, 0.2);
+    transform: translateY(-3px);
+    box-shadow: 0 4px 10px rgba(108, 117, 125, 0.3);
     background-color: #5c636a;
 }
 
@@ -317,4 +383,160 @@
 
 .outline-section {
     animation: fadeIn 0.5s ease;
+}
+
+/* 文档标题输入框样式 */
+.document-title-container {
+    margin-bottom: 25px;
+    position: relative;
+    padding-top: 15px;
+}
+
+.document-title-container::before {
+    content: "文档标题";
+    position: absolute;
+    top: -10px;
+    left: 15px;
+    background-color: #0d6efd;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 1;
+}
+
+#document-title-input {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #212529;
+    background-color: #f8f9fa;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.05);
+    height: auto;
+    line-height: 1.5;
+}
+
+#document-title-input:focus {
+    border-color: #0d6efd;
+    background-color: #fff;
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+#document-title-input:hover:not(:focus) {
+    border-color: #adb5bd;
+    background-color: #f1f3f5;
+}
+
+/* 全局样式 */
+body {
+    background-color: #f0f4f8;
+    color: #333;
+}
+
+/* 卡片样式 */
+.card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+
+.card-header {
+    border-radius: 12px 12px 0 0 !important;
+    padding: 1.2rem 1.5rem;
+    background-color: #0d6efd;
+    color: white;
+    border: none;
+    position: relative;
+}
+
+.card-header::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0d6efd, #6610f2);
+}
+
+.card-body {
+    padding: 1.8rem;
+}
+
+.form-control:focus,
+.btn:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 提交按钮效果 */
+#generate-outline-btn {
+    transition: all 0.3s ease;
+    padding: 12px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+}
+
+#generate-outline-btn i {
+    margin-right: 8px;
+}
+
+#generate-outline-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+/* 步骤导航动画 */
+.step {
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.step.active, .step.completed {
+    transform: translateY(-3px);
+}
+
+/* 动画效果 */
+@keyframes slideInUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+#step1-content, #step2-content, #step3-content {
+    animation: slideInUp 0.5s ease;
+}
+
+/* 下载按钮 */
+#download-link {
+    display: inline-block;
+    padding: 12px 24px;
+    background-color: #0d6efd;
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.2);
+}
+
+#download-link:hover {
+    background-color: #0b5ed7;
+    transform: translateY(-3px);
+    box-shadow: 0 6px 15px rgba(13, 110, 253, 0.3);
+}
+
+#download-link i {
+    margin-right: 8px;
 } 

@@ -9,6 +9,7 @@ import uuid
 
 from api.graph import run_document_workflow, generate_outline, generate_title
 from utils.document_generator import DocumentGenerator
+from api.state import generation_progress, document_requests
 
 # 设置日志
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -37,6 +38,7 @@ class OutlineItem(BaseModel):
 # 大纲编辑模型
 class OutlineEditRequest(BaseModel):
     outline: List[OutlineItem]
+    title: Optional[str] = None
 
 # 标题编辑模型
 class TitleEditRequest(BaseModel):
@@ -65,8 +67,22 @@ class GenerateDocumentResponse(BaseModel):
     message: str
     file_path: Optional[str] = None
 
-# 内存存储（实际应用中应使用数据库）
-document_requests = {}
+# 添加获取生成进度的API端点
+@router.get("/generation-progress/{request_id}")
+async def get_generation_progress(request_id: str):
+    """获取内容生成进度"""
+    logger.info(f"获取生成进度: request_id={request_id}")
+    
+    if request_id not in generation_progress:
+        return {
+            "progress": 0,
+            "current_stage": "not_started",
+            "message": "生成尚未开始",
+            "current_section": None,
+            "completed_sections": []
+        }
+    
+    return generation_progress[request_id]
 
 # 添加兼容旧API的大纲生成端点
 @router.post("/generate-outline", response_model=OutlineResponse)
@@ -282,6 +298,12 @@ async def edit_workflow_outline(request_id: str, outline_edit: OutlineEditReques
         request_data["outline"] = outline_dict
         request_data["user_edited_outline"] = True
         
+        # 更新标题（如果提供）
+        if outline_edit.title:
+            request_data["title"] = outline_edit.title
+            request_data["user_edited_title"] = True
+            logger.info(f"标题已更新: {outline_edit.title}")
+        
         # 提示需要重新生成内容
         request_data["needs_content_update"] = True
         
@@ -293,7 +315,7 @@ async def edit_workflow_outline(request_id: str, outline_edit: OutlineEditReques
             "outline": request_data["outline"],
             "content": request_data.get("content", {}),
             "request_id": request_id,
-            "message": "大纲已更新"
+            "message": "大纲和标题已更新"
         }
         
     except Exception as e:
@@ -316,7 +338,13 @@ async def generate_document(request_id: str, background_tasks: BackgroundTasks):
         
         if request_id not in document_requests:
             logger.warning(f"找不到request_id: {request_id}")
-            raise HTTPException(status_code=404, detail=f"找不到对应的请求记录")
+            
+            # 为了前端体验，返回更友好的错误而不是抛出异常
+            return {
+                "success": False,
+                "message": f"找不到对应的请求记录，可能由于服务器重启导致数据丢失。请重新生成内容后再试。",
+                "file_path": None
+            }
         
         request_data = document_requests[request_id]
         title = request_data["title"]
@@ -327,7 +355,11 @@ async def generate_document(request_id: str, background_tasks: BackgroundTasks):
         # 验证内容数据
         if not content_data or not any(content_data.values()):
             logger.warning("内容数据为空")
-            raise HTTPException(status_code=500, detail="内容数据为空，无法生成文档")
+            return {
+                "success": False,
+                "message": "内容数据为空，无法生成文档。请先生成内容。",
+                "file_path": None
+            }
         
         # 获取静态文件目录，用于保存生成的文件
         static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "app", "static", "documents")
@@ -396,6 +428,8 @@ async def regenerate_content(request_id: str):
         logger.info(f"开始内容生成，标题: {request_data['title']}")
         logger.info(f"大纲章节数: {len(request_data['outline'])}")
         logger.info(f"大纲第一章节: {request_data['outline'][0]['title'] if request_data['outline'] else 'N/A'}")
+        logger.info(f"用户是否编辑了标题: {request_data.get('user_edited_title', False)}")
+        logger.info(f"用户是否编辑了大纲: {request_data.get('user_edited_outline', False)}")
         
         # 重新运行工作流，只执行内容生成阶段
         # 创建一个已包含标题和大纲的初始状态
@@ -408,8 +442,18 @@ async def regenerate_content(request_id: str):
             "title": request_data["title"],
             "outline": request_data["outline"],
             "content": None,
-            "user_edited_outline": True,  # 标记为用户已编辑，确保使用用户修改的版本
-            "user_edited_title": request_data.get("user_edited_title", False)
+            "user_edited_outline": request_data.get("user_edited_outline", False),
+            "user_edited_title": request_data.get("user_edited_title", False),
+            "request_id": request_id  # 添加请求ID到状态中
+        }
+        
+        # 初始化进度
+        generation_progress[request_id] = {
+            "progress": 0,
+            "current_stage": "initializing",
+            "message": "正在初始化内容生成...",
+            "current_section": None,
+            "completed_sections": []
         }
         
         # 运行工作流获取新内容

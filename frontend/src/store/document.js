@@ -124,10 +124,16 @@ export const useDocumentStore = defineStore('document', {
       
       try {
         const response = await axios.post(`/api/generate-document/${this.requestId}`)
-        if (response.data.file_path) {
-          this.documentUrl = `/download/${response.data.file_path}`
+        
+        if (response.data.success) {
+          if (response.data.file_path) {
+            this.documentUrl = `/download/${response.data.file_path}`
+          } else {
+            this.error = '文档生成成功但无法获取下载路径'
+          }
         } else {
-          this.error = '文档生成成功但无法获取下载路径'
+          this.error = response.data.message || '生成文档失败，请重试'
+          this.documentUrl = null
         }
         return response.data
       } catch (error) {
