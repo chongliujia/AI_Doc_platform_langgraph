@@ -222,9 +222,6 @@ cd frontend && npm run dev
 
 ![生成大纲页面](images/大纲.png)
 
-### 实时进度追踪
-
-![实时进度追踪](images/进度追踪.png)
 
 ### 样本文档
 
