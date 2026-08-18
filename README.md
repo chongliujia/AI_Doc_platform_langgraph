@@ -1,3 +1,5 @@
+
+
 # AI文档生成平台
 
 基于LangGraph工作流驱动的智能文档生成平台，自动生成高质量的PPT和Word文档。
@@ -156,8 +158,7 @@ PUT /edit-workflow-outline/{request_id}
         {
             "title": "核心策略分析",
             "content": ["动量策略", "均值回归", "因子投资", "高频交易"]
-        },
-        // 更多章节...
+        }
     ]
 }
 ```
